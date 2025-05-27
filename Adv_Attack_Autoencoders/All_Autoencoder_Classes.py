@@ -340,10 +340,12 @@ class AE_CNN(object):
         W = self.weight_variable((self.M,self.M))
         x = tf.nn.elu(tf.nn.embedding_lookup(W, input)) 
         x = tf.reshape(x,[-1,1,self.M])
-        conv0 = tf.layers.conv1d(x, 16, 6, strides=1, padding='same', data_format='channels_first',
-                             activation=tf.nn.relu, use_bias=True,
-                             kernel_initializer=tf.glorot_uniform_initializer(seed=None, dtype=tf.float32),
-                             trainable=True)
+        conv0 = tf.layers.conv1d(
+            x, 16, 6, strides=1, padding='same', 
+            data_format='channels_last',  # old: data_format='NHWC'
+            activation=tf.nn.relu, use_bias=True,
+            kernel_initializer=tf.glorot_uniform_initializer(seed=None, dtype=tf.float32),
+            trainable=True)
         flattened0 = tf.contrib.layers.flatten(conv0)
         x = tf.layers.dense(flattened0, 2*self.n, activation=None)
         x = tf.reshape(x, shape=[-1,2,self.n]) 
@@ -354,14 +356,18 @@ class AE_CNN(object):
     def decoder(self, input, dr_out, is_training):
         '''The Receiver'''
         reshaped = tf.reshape(input, shape=[-1,1,2,self.n])
-        conv1 = tf.layers.conv2d(reshaped, 16, [2,3], strides=(1, 1), padding='same', data_format='channels_first',
-                             activation=tf.nn.relu, use_bias=True,
-                             kernel_initializer=tf.glorot_uniform_initializer(seed=None, dtype=tf.float32),
-                             trainable=True)
-        conv2 = tf.layers.conv2d(conv1, 8, [2,3], strides=(1, 1), padding='same', data_format='channels_first',
-                             activation=tf.nn.relu, use_bias=True,
-                             kernel_initializer=tf.glorot_uniform_initializer(seed=None, dtype=tf.float32),
-                             trainable=True)
+        conv1 = tf.layers.conv2d(
+            reshaped, 16, [2,3], strides=(1, 1), padding='same', 
+            data_format='channels_last',  # old: data_format='NHWC'
+            activation=tf.nn.relu, use_bias=True,
+            kernel_initializer=tf.glorot_uniform_initializer(seed=None, dtype=tf.float32),
+            trainable=True)
+        conv2 = tf.layers.conv2d(
+            conv1, 8, [2,3], strides=(1, 1), padding='same', 
+            data_format='channels_last',  # old: data_format='NHWC'
+            activation=tf.nn.relu, use_bias=True,
+            kernel_initializer=tf.glorot_uniform_initializer(seed=None, dtype=tf.float32),
+            trainable=True)
         drout = tf.layers.dropout(conv2, rate=dr_out, noise_shape=None, training=is_training, name='dropou1')
         flattened = tf.contrib.layers.flatten(drout)
         dense1 = tf.layers.dense(flattened, 2*self.M, activation=tf.nn.relu)
@@ -400,6 +406,9 @@ class AE_CNN(object):
     
     def transmit(self, s):
         '''Returns the transmitted sigals corresponding to message indices'''
+        # This method tries to fetch self.vars['x'], but 'x' is a tensor in the graph, not a placeholder.
+        # Since 'x' is computed inside the graph with random input, here it won't work directly.
+        # You may want to run encoder(s) or modify accordingly.
         return self.sess.run(self.vars['x'], feed_dict={self.vars['s']: s})
        
     def train(self, is_training, dr_out ,p, training_params, validation_params):  
@@ -422,14 +431,14 @@ class AE_CNN(object):
     
     def train_step(self, is_training, dr_out , p, batch_size, ebnodb, lr):
         '''A single training step'''
-        self.sess.run(self.vars['train_op'], feed_dict=self.gen_feed_dict(is_training, dr_out , p, batch_size, ebnodb, lr)) #self.sess.run(train_op, feed_dict=self.gen_feed_dict(batch_size, ebnodb, lr))#s
+        self.sess.run(self.vars['train_op'], feed_dict=self.gen_feed_dict(is_training, dr_out , p, batch_size, ebnodb, lr)) 
         return 
     
     def weight_variable(self, shape):
         '''Xavier-initialized weights optimized for ReLU Activations'''
         (fan_in, fan_out) = shape
-        low = np.sqrt(6.0/(fan_in + fan_out)) 
-        high = -np.sqrt(6.0/(fan_in + fan_out))
+        low = -np.sqrt(6.0/(fan_in + fan_out))   # corrected: low < high
+        high = np.sqrt(6.0/(fan_in + fan_out))   # corrected
         return tf.Variable(tf.random_uniform(shape, minval=low, maxval=high, dtype=tf.float32))
     
     
@@ -446,21 +455,21 @@ class AE_CNN(object):
         for i in range(iterations):
             # No attack - clean case
             bler = np.array([self.sess.run(self.vars['bler'],
-                            feed_dict=self.gen_feed_dict(is_training, dr_out , np.zeros([1,2,self.n]), batch_size, ebnodb, lr=0)) for ebnodb in ebnodbs]) #bler = np.array([self.sess.run(self.vars['bler'],feed_dict=self.gen_feed_dict(p, batch_size, ebnodb, lr=0)) for ebnodb in ebnodbs])
+                            feed_dict=self.gen_feed_dict(is_training, dr_out , np.zeros([1,2,self.n]), batch_size, ebnodb, lr=0)) for ebnodb in ebnodbs]) 
             BLER_no_attack = BLER_no_attack + bler/iterations
             # attack - rolled attack - nonsynchronous
             p_rolled = np.roll(p, int(np.ceil(np.random.uniform(0,self.n))))
             bler_attack_rolled = np.array([self.sess.run(self.vars['bler'],
-                            feed_dict=self.gen_feed_dict(is_training, dr_out ,p_rolled,batch_size, ebnodb, lr=0)) for ebnodb in ebnodbs]) # I think lr=0 is equal to is_training=False
+                            feed_dict=self.gen_feed_dict(is_training, dr_out ,p_rolled,batch_size, ebnodb, lr=0)) for ebnodb in ebnodbs]) 
             BLER_attack_rolled = BLER_attack_rolled + bler_attack_rolled/iterations
             # Jamming attack
             normal_noise_as_jammer = np.random.normal(0,1,p.shape)
             jamming = np.linalg.norm(p) * (1 / np.linalg.norm(normal_noise_as_jammer)) * normal_noise_as_jammer
             bler_jamming= np.array([self.sess.run(self.vars['bler'],
-                            feed_dict=self.gen_feed_dict(is_training, dr_out, jamming,batch_size, ebnodb, lr=0)) for ebnodb in ebnodbs]) # I think lr=0 is equal to is_training=False
+                            feed_dict=self.gen_feed_dict(is_training, dr_out, jamming,batch_size, ebnodb, lr=0)) for ebnodb in ebnodbs]) 
             BLER_jamming = BLER_jamming + bler_jamming/iterations
         return BLER_no_attack, BLER_attack_rolled, BLER_jamming
-    
+
     
     
     
