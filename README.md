@@ -48,3 +48,5 @@ If you want to add your paper here, please send me an email.
 - I. Shakeel, “Machine learning based featureless signalling,” in Proc. IEEE Military Communications Conference (MILCOM), October 2018.
 - F. B. Mismar and B. L. Evans, “Deep Q-Learning for self-organizing networks fault management and radio performance improvement,” to appear in Proc. Asilomar Conference on Signals, Systems, and Computers, October 2018.
 - Y. Shi, T. Erpek, Y. E. Sagduyu and J. H. Li, “Spectrum data poisoning with adversarial deep learning,” in Proc. IEEE Military Communications Conference (MILCOM), 2018.
+
+# SemCom-Adv-Attack
