@@ -77,10 +77,8 @@ class AE_MLP(object):
         return
     
     def create_session(self):
-        '''Create a session for the autoencoder instance with the computational graph'''
-        gpu_options = tf.GPUOptions(allow_growth=True)  # Prevent TensorFlow from consuming all GPU memory
-        config = tf.ConfigProto(gpu_options=gpu_options, log_device_placement=True)  # Log device placement
-        self.sess = tf.Session(graph=self.graph, config=config)
+        '''Create a session for the autoencoder instance with the compuational graph'''
+        self.sess = tf.Session(graph=self.graph)        
         self.sess.run(self.vars['init'])
         return
     
